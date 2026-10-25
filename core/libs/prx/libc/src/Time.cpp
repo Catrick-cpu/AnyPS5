@@ -410,6 +410,23 @@ char** HostZoneNames() {
 #endif
 }
 
+#ifdef _WIN32
+std::string ansiToUtf8(const char* ansiStr) {
+    if (!ansiStr) return "";
+    const int len = static_cast<int>(std::strlen(ansiStr));
+    const int cp = GetACP();
+    const int wideLen = MultiByteToWideChar(cp, 0, ansiStr, len, nullptr, 0);
+    if (wideLen <= 0) return ansiStr;
+    std::wstring wide(wideLen, L'\0');
+    if (MultiByteToWideChar(cp, 0, ansiStr, len, &wide[0], wideLen) <= 0) return ansiStr;
+    const int utf8Len = WideCharToMultiByte(CP_UTF8, 0, &wide[0], static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+    if (utf8Len <= 0) return ansiStr;
+    std::string utf8(utf8Len, '\0');
+    if (WideCharToMultiByte(CP_UTF8, 0, &wide[0], static_cast<int>(wide.size()), &utf8[0], utf8Len, nullptr, nullptr) <= 0) return ansiStr;
+    return utf8;
+}
+#endif
+
 char* GuestZoneName(int index) {
     static char unnamed[] = "   ";
     char** names = HostZoneNames();
@@ -418,7 +435,19 @@ char* GuestZoneName(int index) {
 #else
     const bool daylightSaving = ::daylight != 0;
 #endif
-    return index == 1 && !daylightSaving ? unnamed : names[index];
+    if (index == 1 && !daylightSaving) return unnamed;
+#ifdef _WIN32
+    static std::string converted[2];
+    static bool initialized = false;
+    if (!initialized) {
+        converted[0] = ansiToUtf8(names[0]);
+        converted[1] = ansiToUtf8(names[1]);
+        initialized = true;
+    }
+    return const_cast<char*>(converted[index].c_str());
+#else
+    return names[index];
+#endif
 }
 }
 
@@ -514,7 +543,14 @@ GuestTm* APS5_VABI localtime_s_nid_postfix(const int64_t* timer, GuestTm* result
     _get_dstbias(&daylightBias);
     const bool daylight = host.tm_isdst > 0;
     result->tm_gmtoff = -static_cast<std::int64_t>(standardBias + (daylight ? daylightBias : 0));
-    result->tm_zone = _tzname[daylight ? 1 : 0];
+    static thread_local std::string cachedZone[2];
+    static thread_local bool zoneInitialized = false;
+    if (!zoneInitialized) {
+        cachedZone[0] = ansiToUtf8(_tzname[0]);
+        cachedZone[1] = ansiToUtf8(_tzname[1]);
+        zoneInitialized = true;
+    }
+    result->tm_zone = cachedZone[daylight ? 1 : 0].c_str();
 #else
     const std::time_t t = static_cast<std::time_t>(*timer);
     if (localtime_r(&t, &host) == nullptr) {
