@@ -680,22 +680,33 @@ def module_stem(name, fold):
         name = name.lower()
     for suffix in MODULE_FILE_SUFFIXES:
         if len(name) > len(suffix) and name.endswith(suffix):
-            name = name[:-len(suffix)]
-            break
-    return name
+            return name[:-len(suffix)]
+    return None
 
 
 class ModuleNames(set):
     """Title module names, matched like the relinker: by the name without its .prx, .sprx, .suprx or .debug_prx suffix, and
-    ignoring case for Windows output."""
+    ignoring case for Windows output. Both the declared name and the physical filename must carry a recognized suffix
+    for stem matching to apply; suffixless or arbitrary-extension names match only by exact filename."""
 
     def __init__(self, names=(), fold=False):
         super().__init__(names)
         self.fold = fold
-        self.stems = {module_stem(name, fold) for name in self}
+        self.stems = {}
+        for name in self:
+            stem = module_stem(name, fold)
+            if stem is not None:
+                self.stems[stem] = name
 
     def __contains__(self, library):
-        return isinstance(library, str) and module_stem(library, self.fold) in self.stems
+        if not isinstance(library, str):
+            return False
+        if set.__contains__(self, library):
+            return True
+        stem = module_stem(library, self.fold)
+        if stem is not None:
+            return stem in self.stems
+        return False
 
 
 def classify(nid, library, providers, stubs, modules, partial=frozenset()):
