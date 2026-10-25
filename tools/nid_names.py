@@ -223,6 +223,14 @@ def main(argv=None):
         if re.fullmatch(r"[A-Za-z0-9+\-]{11}", nid) is None:
             parser.error(f"invalid NID {nid!r}: expected 11 characters from A-Z, a-z, 0-9, + or -")
 
+    if not args.nid:
+        if args.json:
+            print(json.dumps({"db_entries": 0, "rows": []}, indent=1))
+        else:
+            print("%-12s %-40s %-12s %s" % ("NID", "STUB", "STATUS", "SUGGESTION"))
+            print("%d unknowns, %d suggestions (%d already implemented)" % (0, 0, 0))
+        return 0
+
     db_path = Path(args.db) if args.db else DEFAULT_CACHE
     try:
         db = load_db(db_path)
