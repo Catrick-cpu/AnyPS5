@@ -8,6 +8,7 @@
 #include "prx/libkernel/Pthread/include/Cancel.hpp"
 
 #include "prx/libc/include/General.hpp"
+#include "prx/libc/include/GuestArena.hpp"
 #include "prx/libkernel/KernelErrors.hpp"
 #include "prx/libkernel/Pthread/include/Pthread.hpp"
 #include <algorithm>
@@ -504,6 +505,20 @@ int APS5_VABI clock_gettime_nid_postfix(int clockId, KernelTimespec* tp) {
 int APS5_VABI gettimeofday_nid_postfix(KernelTimeval* tv, KernelTimezone* tz) {
     KernelTimeval ignoredTime{};
     if (tv == nullptr) tv = &ignoredTime;
+    else {
+        const GuestArena::HostWrite tvDest(tv, sizeof(KernelTimeval));
+        if (!tvDest.Open()) {
+            *__error_nid_postfix() = GUEST_EFAULT;
+            return -1;
+        }
+    }
+    if (tz != nullptr) {
+        const GuestArena::HostWrite tzDest(tz, sizeof(KernelTimezone));
+        if (!tzDest.Open()) {
+            *__error_nid_postfix() = GUEST_EFAULT;
+            return -1;
+        }
+    }
 #ifdef _WIN32
     FILETIME ft{};
     GetSystemTimePreciseAsFileTime(&ft);
@@ -705,11 +720,15 @@ int APS5_VABI sceKernelConvertUtcToLocaltime(int64_t utc_time, int64_t* local_ti
 
 int APS5_VABI sceKernelGettimeofday(KernelTimeval* tp) {
     if (tp == nullptr) return SceKernelErrorEfault;
+    const GuestArena::HostWrite dest(tp, sizeof(KernelTimeval));
+    if (!dest.Open()) return SceKernelErrorEfault;
     return gettimeofday_nid_postfix(tp, nullptr);
 }
 
 int APS5_VABI sceKernelGettimezone(KernelTimezone* tz) {
     if (tz == nullptr) return SceKernelErrorEfault;
+    const GuestArena::HostWrite dest(tz, sizeof(KernelTimezone));
+    if (!dest.Open()) return SceKernelErrorEfault;
     *tz = {0, 0};
     return 0;
 }

@@ -2,6 +2,7 @@
 #include "prx/libc/include/Api.hpp"
 #include "SceTypes.hpp"
 #include "prx/libc/include/General.hpp"
+#include "prx/libc/include/GuestArena.hpp"
 #include "prx/libkernel/Pthread/Posix/Common.hpp"
 #include "prx/libkernel/Pthread/include/Pthread.hpp"
 #include "prx/libc/include/general/VabiMacros.hpp"
@@ -372,6 +373,11 @@ extern "C" int APS5_VABI getitimer_nid_postfix(int which, GuestItimerval* output
         *__error_nid_postfix() = 14;
         return -1;
     }
+    const GuestArena::HostWrite dest(output, sizeof(GuestItimerval));
+    if (!dest.Open()) {
+        *__error_nid_postfix() = 14;
+        return -1;
+    }
     if (which != 0) {
         *output = {};
         return 0;
@@ -419,6 +425,14 @@ KernelTimeval ItimerTimeval(std::chrono::microseconds duration) {
 extern "C" int APS5_VABI setitimer_nid_postfix(int which, const GuestItimerval* value, GuestItimerval* previous) {
     if (which < ItimerReal || which > ItimerProf) { *__error_nid_postfix() = 22; return -1; }
     if (value == nullptr && previous == nullptr) { *__error_nid_postfix() = 14; return -1; }
+    if (value != nullptr) {
+        const GuestArena::HostWrite valueSrc(const_cast<GuestItimerval*>(value), sizeof(GuestItimerval));
+        if (!valueSrc.Open()) { *__error_nid_postfix() = 14; return -1; }
+    }
+    if (previous != nullptr) {
+        const GuestArena::HostWrite prevDest(previous, sizeof(GuestItimerval));
+        if (!prevDest.Open()) { *__error_nid_postfix() = 14; return -1; }
+    }
     GuestItimerval requested{};
     if (value != nullptr) {
         requested = *value;
