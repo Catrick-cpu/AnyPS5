@@ -93,6 +93,17 @@ class DebtSplitTests(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertIn(f"[reference]({target})", moved)
         self.assertIn("[local](../ARCHITECTURE.md#layout)", moved)
+
+    def test_split_relinks_angle_wrapped_destinations(self):
+        links = ("[guide](<ARCHITECTURE.md>)", "[spaced](<a guide.md>)",
+                 "[web](<https://example.test/guide>)", "[fragment](<#layout>)")
+        self.write(INDEX, ORIGINAL.replace(A_STUB, A_STUB + " " + " ".join(links)))
+        self.split()
+        moved = self.read("docs/dev/debt/libSceA.md")
+        for link in ("[guide](<../ARCHITECTURE.md>)", "[spaced](<../a guide.md>)",
+                     "[web](<https://example.test/guide>)", "[fragment](<#layout>)"):
+            with self.subTest(link=link):
+                self.assertIn(link, moved)
         self.assertIn("../../../core/libs/prx/libSceA/Export.cpp", moved)
 
     def test_split_moves_entries_by_their_first_core_link(self):
